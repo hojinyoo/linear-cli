@@ -14,6 +14,10 @@ use crate::output::{
 use crate::pagination::paginate_nodes;
 use crate::text::truncate;
 
+fn safe_terminal_value(value: &str) -> String {
+    crate::text::sanitize_terminal_text(value)
+}
+
 #[derive(Subcommand)]
 pub enum StatusCommands {
     /// List all issue statuses for a team
@@ -73,7 +77,9 @@ pub async fn handle(cmd: StatusCommands, output: &OutputOptions) -> Result<()> {
         StatusCommands::Get { ids, team } => {
             let final_ids = read_ids_from_stdin(ids);
             if final_ids.is_empty() {
-                anyhow::bail!("No status IDs provided. Provide IDs or pipe them via stdin.");
+                anyhow::bail!(
+                    "No status IDs provided. Provide IDs as arguments or pipe them via stdin.\nExamples:\n  linear statuses get STATUS_ID -t ENG\n  printf '%s\\n' STATUS_ID OTHER_STATUS_ID | linear statuses get - -t ENG"
+                );
             }
             get_statuses(&final_ids, &team, output).await
         }
@@ -306,10 +312,19 @@ async fn get_statuses(ids: &[String], team: &str, output: &OutputOptions) -> Res
         if idx > 0 {
             println!();
         }
-        println!("{}", status["name"].as_str().unwrap_or("").bold());
+        println!(
+            "{}",
+            safe_terminal_value(status["name"].as_str().unwrap_or("")).bold()
+        );
         println!("{}", "-".repeat(40));
-        println!("Type: {}", status["type"].as_str().unwrap_or("-"));
-        println!("Color: {}", status["color"].as_str().unwrap_or("-"));
+        println!(
+            "Type: {}",
+            safe_terminal_value(status["type"].as_str().unwrap_or("-"))
+        );
+        println!(
+            "Color: {}",
+            safe_terminal_value(status["color"].as_str().unwrap_or("-"))
+        );
         println!(
             "Position: {}",
             status["position"]
@@ -319,10 +334,13 @@ async fn get_statuses(ids: &[String], team: &str, output: &OutputOptions) -> Res
         );
         if let Some(desc) = status["description"].as_str() {
             if !desc.is_empty() {
-                println!("Description: {}", desc);
+                println!("Description: {}", safe_terminal_value(desc));
             }
         }
-        println!("ID: {}", status["id"].as_str().unwrap_or("-"));
+        println!(
+            "ID: {}",
+            safe_terminal_value(status["id"].as_str().unwrap_or("-"))
+        );
     }
 
     Ok(())

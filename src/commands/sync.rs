@@ -159,7 +159,7 @@ fn scan_local_projects(dir: &str) -> Result<Vec<LocalProject>> {
     }
 
     // Sort alphabetically
-    projects.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    projects.sort_by_key(|project| project.name.to_lowercase());
 
     Ok(projects)
 }

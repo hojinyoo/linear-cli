@@ -53,10 +53,29 @@ pub enum TemplateCommands {
     /// List available templates
     #[command(alias = "ls")]
     List,
-    /// Create a new template interactively
+    /// Create a new local template
+    #[command(after_help = r#"EXAMPLES:
+    linear templates create bug --team ENG --priority 2 --label bug --title-prefix "[Bug]"
+    linear tpl create chore --description "Checklist..." --label ops,internal
+    linear --dry-run --output json tpl create bug --team ENG --priority 2"#)]
     Create {
         /// Template name
         name: String,
+        /// Prefix to add to issue titles
+        #[arg(long)]
+        title_prefix: Option<String>,
+        /// Default issue description
+        #[arg(short, long)]
+        description: Option<String>,
+        /// Default priority (0=none, 1=urgent, 2=high, 3=normal, 4=low)
+        #[arg(short = 'p', long = "priority", value_name = "0-4")]
+        default_priority: Option<i32>,
+        /// Default label to apply. Repeat or comma-separate for multiple labels.
+        #[arg(short = 'l', long = "label", value_delimiter = ',')]
+        labels: Vec<String>,
+        /// Default team name, key, or ID
+        #[arg(short, long)]
+        team: Option<String>,
     },
     /// Show template details
     #[command(alias = "get")]
@@ -176,7 +195,22 @@ pub fn get_template(name: &str) -> Result<Option<IssueTemplate>> {
 pub async fn handle(cmd: TemplateCommands, output: &OutputOptions) -> Result<()> {
     match cmd {
         TemplateCommands::List => list_templates(output),
-        TemplateCommands::Create { name } => create_template(&name, output),
+        TemplateCommands::Create {
+            name,
+            title_prefix,
+            description,
+            default_priority,
+            labels,
+            team,
+        } => create_template(
+            &name,
+            title_prefix,
+            description,
+            default_priority,
+            labels,
+            team,
+            output,
+        ),
         TemplateCommands::Show { name } => show_template(&name, output),
         TemplateCommands::Delete { name, force } => delete_template(&name, force, output),
         TemplateCommands::RemoteList { template_type } => {
@@ -282,11 +316,82 @@ fn list_templates(output: &OutputOptions) -> Result<()> {
     Ok(())
 }
 
-fn create_template(name: &str, output: &OutputOptions) -> Result<()> {
+fn create_template(
+    name: &str,
+    title_prefix: Option<String>,
+    description: Option<String>,
+    default_priority: Option<i32>,
+    labels: Vec<String>,
+    team: Option<String>,
+    output: &OutputOptions,
+) -> Result<()> {
     let mut store = load_templates()?;
 
     if store.templates.contains_key(name) {
         anyhow::bail!("Template already exists. Delete it first or choose a different name.");
+    }
+
+    if let Some(priority) = default_priority {
+        if !(0..=4).contains(&priority) {
+            anyhow::bail!(
+                "Invalid priority: {}. Use 0=none, 1=urgent, 2=high, 3=normal, or 4=low.",
+                priority
+            );
+        }
+    }
+
+    let has_flag_values = title_prefix.is_some()
+        || description.is_some()
+        || default_priority.is_some()
+        || !labels.is_empty()
+        || team.is_some();
+
+    if has_flag_values || output.is_json() || output.has_template() || output.dry_run {
+        let default_priority = default_priority.and_then(|p| if p == 0 { None } else { Some(p) });
+        let default_labels: Vec<String> = labels
+            .into_iter()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        let template = IssueTemplate {
+            name: name.to_string(),
+            title_prefix,
+            description,
+            default_priority,
+            default_labels,
+            team,
+        };
+
+        if output.dry_run {
+            let payload = json!({
+                "dry_run": true,
+                "would_create": template,
+            });
+            if output.is_json() || output.has_template() {
+                print_json_owned(payload, output)?;
+            } else {
+                println!(
+                    "Dry run: would create template '{}'.",
+                    safe_terminal_value(name)
+                );
+            }
+            return Ok(());
+        }
+
+        store.templates.insert(name.to_string(), template);
+        save_templates(&store)?;
+
+        if output.is_json() || output.has_template() {
+            print_json_owned(json!(store.templates.get(name)), output)?;
+            return Ok(());
+        }
+
+        println!(
+            "{} Template created: {}",
+            "+".green(),
+            safe_terminal_value(name).cyan()
+        );
+        return Ok(());
     }
 
     println!("{} Creating template: {}", "+".green(), name.cyan());

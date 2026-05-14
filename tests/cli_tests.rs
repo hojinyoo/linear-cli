@@ -317,6 +317,14 @@ fn test_bulk_update_state_help() {
     assert!(stdout.contains("--issues"));
 }
 
+#[test]
+fn test_bulk_requires_issue_ids_with_actionable_example() {
+    let (code, _stdout, stderr) = run_cli(&["bulk", "update-state", "Done"]);
+    assert_ne!(code, 0);
+    assert!(stderr.contains("No issues specified"));
+    assert!(stderr.contains("linear bulk update-state Done -i LIN-1,LIN-2"));
+}
+
 // --- Global flags ---
 
 #[test]
@@ -1554,6 +1562,45 @@ fn test_templates_remote_list_help() {
         stdout.contains("--type") || stdout.contains("template"),
         "templates remote-list should show type filter option"
     );
+}
+
+#[test]
+fn test_templates_create_help_supports_non_interactive_flags() {
+    let (code, stdout, _stderr) = run_cli(&["templates", "create", "--help"]);
+    assert_eq!(code, 0);
+    assert!(stdout.contains("--team"));
+    assert!(stdout.contains("--priority"));
+    assert!(stdout.contains("--label"));
+    assert!(stdout.contains("--title-prefix"));
+}
+
+#[test]
+fn test_templates_create_dry_run_is_non_interactive_json() {
+    let (code, stdout, stderr) = run_cli(&[
+        "--dry-run",
+        "--output",
+        "json",
+        "templates",
+        "create",
+        "agent-bug",
+        "--team",
+        "ENG",
+        "--priority",
+        "2",
+        "--label",
+        "bug",
+        "--label",
+        "agent",
+        "--title-prefix",
+        "[Bug]",
+        "--description",
+        "Checklist",
+    ]);
+    assert_eq!(code, 0, "stderr: {}", stderr);
+    assert!(stdout.contains("\"dry_run\""));
+    assert!(stdout.contains("\"would_create\""));
+    assert!(stdout.contains("\"agent-bug\""));
+    assert!(stdout.contains("\"default_priority\": 2"));
 }
 
 #[test]

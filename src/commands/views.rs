@@ -13,6 +13,10 @@ use crate::pagination::paginate_nodes;
 use crate::text::truncate;
 use crate::types::CustomView;
 
+fn safe_terminal_value(value: &str) -> String {
+    crate::text::sanitize_terminal_text(value)
+}
+
 #[derive(Subcommand)]
 pub enum ViewCommands {
     /// List custom views
@@ -271,36 +275,40 @@ async fn get_view(name_or_id: &str, output: &OutputOptions) -> Result<()> {
 
     let cv: CustomView = serde_json::from_value(view.clone())?;
 
-    println!("{}", cv.name.bold());
+    println!("{}", safe_terminal_value(&cv.name).bold());
     println!("{}", "-".repeat(40));
 
     if let Some(desc) = &cv.description {
-        println!("Description: {}", desc);
+        println!("Description: {}", safe_terminal_value(desc));
     }
 
     println!("Shared: {}", if cv.shared { "Yes" } else { "No" });
 
     if let Some(owner) = &cv.owner {
-        println!("Owner: {}", owner.name);
+        println!("Owner: {}", safe_terminal_value(&owner.name));
     }
 
     if let Some(team) = &cv.team {
-        println!("Team: {} ({})", team.name, team.key);
+        println!(
+            "Team: {} ({})",
+            safe_terminal_value(&team.name),
+            safe_terminal_value(&team.key)
+        );
     }
 
     if let Some(icon) = &cv.icon {
-        println!("Icon: {}", icon);
+        println!("Icon: {}", safe_terminal_value(icon));
     }
 
     if let Some(color) = &cv.color {
-        println!("Color: {}", color);
+        println!("Color: {}", safe_terminal_value(color));
     }
 
     if let Some(model) = &cv.model_name {
-        println!("Model: {}", model);
+        println!("Model: {}", safe_terminal_value(model));
     }
 
-    println!("ID: {}", cv.id);
+    println!("ID: {}", safe_terminal_value(&cv.id));
 
     if let Some(created) = &cv.created_at {
         println!("Created: {}", created.chars().take(10).collect::<String>());
@@ -595,6 +603,19 @@ pub async fn fetch_view_filter(
     }
 
     Ok(filter.clone())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_safe_terminal_value_removes_escape_sequences() {
+        assert_eq!(
+            safe_terminal_value("bad\u{1b}]52;c;ZXZpbA==\u{7}title"),
+            "badtitle"
+        );
+    }
 }
 
 /// Fetch the projectFilterData for a custom view (used by projects list --view).

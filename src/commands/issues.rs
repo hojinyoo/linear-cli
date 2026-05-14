@@ -330,7 +330,7 @@ pub async fn handle(
             let final_ids = read_ids_from_stdin(ids);
             if final_ids.is_empty() {
                 anyhow::bail!(
-                    "No issue IDs provided. Provide IDs as arguments or pipe them via stdin."
+                    "No issue IDs provided. Provide IDs as arguments or pipe them via stdin.\nExamples:\n  linear issues get LIN-123\n  printf '%s\\n' LIN-123 LIN-456 | linear issues get -"
                 );
             }
             get_issues(&final_ids, output, history, comments).await
@@ -1165,8 +1165,14 @@ async fn get_issue(id: &str, output: &OutputOptions, history: bool, comments: bo
         }
     }
 
-    println!("\nURL: {}", issue["url"].as_str().unwrap_or("-"));
-    println!("ID:  {}", issue["id"].as_str().unwrap_or("-"));
+    println!(
+        "\nURL: {}",
+        safe_terminal_value(issue["url"].as_str().unwrap_or("-"))
+    );
+    println!(
+        "ID:  {}",
+        safe_terminal_value(issue["id"].as_str().unwrap_or("-"))
+    );
 
     // Display activity history if requested
     if history {
@@ -1419,8 +1425,14 @@ async fn create_issue(
             identifier.cyan(),
             issue_title
         );
-        println!("  ID:  {}", issue["id"].as_str().unwrap_or(""));
-        println!("  URL: {}", issue["url"].as_str().unwrap_or(""));
+        println!(
+            "  ID:  {}",
+            safe_terminal_value(issue["id"].as_str().unwrap_or(""))
+        );
+        println!(
+            "  URL: {}",
+            safe_terminal_value(issue["url"].as_str().unwrap_or(""))
+        );
     } else {
         anyhow::bail!("Failed to create issue");
     }

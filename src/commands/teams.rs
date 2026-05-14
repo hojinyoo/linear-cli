@@ -106,7 +106,9 @@ pub async fn handle(cmd: TeamCommands, output: &OutputOptions) -> Result<()> {
         TeamCommands::Get { ids } => {
             let final_ids = read_ids_from_stdin(ids);
             if final_ids.is_empty() {
-                anyhow::bail!("No team IDs provided. Provide IDs or pipe them via stdin.");
+                anyhow::bail!(
+                    "No team IDs provided. Provide IDs as arguments or pipe them via stdin.\nExamples:\n  linear teams get ENG\n  printf '%s\\n' ENG OPS | linear teams get -"
+                );
             }
             get_teams(&final_ids, output).await
         }

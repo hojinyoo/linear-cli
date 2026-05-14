@@ -256,14 +256,15 @@ Local templates and Linear workspace (remote) templates.
 ```bash
 # Local templates
 linear-cli templates list                        # List local templates
-linear-cli tpl create                            # Create interactively
+linear-cli tpl create bug --team ENG --priority 2 --label bug
+linear-cli --dry-run --output json tpl create bug --team ENG
 linear-cli tpl show TEMPLATE_NAME                # Show details
-linear-cli tpl delete TEMPLATE_NAME              # Delete
+linear-cli tpl delete TEMPLATE_NAME --force      # Delete
 
 # Linear workspace templates
 linear-cli tpl remote-list                       # List API templates
 linear-cli tpl remote-get TEMPLATE_ID            # Get template
-linear-cli tpl remote-create -n "Bug Report"     # Create
+linear-cli tpl remote-create -n "Bug Report" --type issue
 linear-cli tpl remote-update TEMPLATE_ID         # Update
 linear-cli tpl remote-delete TEMPLATE_ID         # Delete
 ```
@@ -343,10 +344,10 @@ linear-cli tr snooze LIN-123                     # Snooze for later
 ### Bulk Operations
 
 ```bash
-linear-cli bulk update-state LIN-1 LIN-2 -s Done   # Bulk status update
-linear-cli b assign LIN-1 LIN-2 -a "Alice"         # Bulk assign
-linear-cli b label LIN-1 LIN-2 -l bug              # Bulk add label
-linear-cli b unassign LIN-1 LIN-2                   # Bulk unassign
+linear-cli bulk update-state Done -i LIN-1,LIN-2   # Bulk status update
+linear-cli b assign "Alice" -i LIN-1,LIN-2         # Bulk assign
+linear-cli b label bug -i LIN-1,LIN-2              # Bulk add label
+linear-cli b unassign -i LIN-1,LIN-2               # Bulk unassign
 ```
 
 ### Git Integration

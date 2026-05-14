@@ -14,6 +14,10 @@ use crate::pagination::paginate_nodes;
 use crate::text::truncate;
 use crate::types::Document;
 
+fn safe_terminal_value(value: &str) -> String {
+    crate::text::sanitize_terminal_text(value)
+}
+
 #[derive(Subcommand)]
 pub enum DocumentCommands {
     /// List all documents
@@ -104,7 +108,9 @@ pub async fn handle(cmd: DocumentCommands, output: &OutputOptions) -> Result<()>
         DocumentCommands::Get { ids } => {
             let final_ids = read_ids_from_stdin(ids);
             if final_ids.is_empty() {
-                anyhow::bail!("No document IDs provided. Provide IDs or pipe them via stdin.");
+                anyhow::bail!(
+                    "No document IDs provided. Provide IDs as arguments or pipe them via stdin.\nExamples:\n  linear documents get DOCUMENT_ID\n  printf '%s\\n' DOCUMENT_ID OTHER_DOCUMENT_ID | linear documents get -"
+                );
             }
             get_documents(&final_ids, output).await
         }
@@ -268,27 +274,30 @@ async fn get_document(id: &str, output: &OutputOptions) -> Result<()> {
 
     let doc: Document = serde_json::from_value(document.clone())?;
 
-    println!("{}", doc.title.bold());
+    println!("{}", safe_terminal_value(&doc.title).bold());
     println!("{}", "-".repeat(40));
 
     if let Some(proj) = &doc.project {
-        println!("Project: {}", proj.name);
+        println!("Project: {}", safe_terminal_value(&proj.name));
     }
 
     if let Some(creator) = &doc.creator {
-        println!("Creator: {}", creator.name);
+        println!("Creator: {}", safe_terminal_value(&creator.name));
     }
 
     if let Some(icon) = &doc.icon {
-        println!("Icon: {}", icon);
+        println!("Icon: {}", safe_terminal_value(icon));
     }
 
     if let Some(color) = &doc.color {
-        println!("Color: {}", color);
+        println!("Color: {}", safe_terminal_value(color));
     }
 
-    println!("URL: {}", doc.url.as_deref().unwrap_or("-"));
-    println!("ID: {}", doc.id);
+    println!(
+        "URL: {}",
+        safe_terminal_value(doc.url.as_deref().unwrap_or("-"))
+    );
+    println!("ID: {}", safe_terminal_value(&doc.id));
 
     if let Some(created) = &doc.created_at {
         println!("Created: {}", created.chars().take(10).collect::<String>());
@@ -302,7 +311,7 @@ async fn get_document(id: &str, output: &OutputOptions) -> Result<()> {
     if let Some(content) = &doc.content {
         println!("\n{}", "Content".bold());
         println!("{}", "-".repeat(40));
-        println!("{}", content);
+        println!("{}", safe_terminal_value(content));
     }
 
     Ok(())
@@ -402,15 +411,34 @@ async fn create_document(
         println!(
             "{} Created document: {}",
             "+".green(),
-            document["title"].as_str().unwrap_or("")
+            safe_terminal_value(document["title"].as_str().unwrap_or(""))
         );
-        println!("  ID: {}", document["id"].as_str().unwrap_or(""));
-        println!("  URL: {}", document["url"].as_str().unwrap_or(""));
+        println!(
+            "  ID: {}",
+            safe_terminal_value(document["id"].as_str().unwrap_or(""))
+        );
+        println!(
+            "  URL: {}",
+            safe_terminal_value(document["url"].as_str().unwrap_or(""))
+        );
     } else {
         anyhow::bail!("Failed to create document");
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_safe_terminal_value_removes_escape_sequences() {
+        assert_eq!(
+            safe_terminal_value("bad\u{1b}]52;c;ZXZpbA==\u{7}title"),
+            "badtitle"
+        );
+    }
 }
 
 #[allow(clippy::too_many_arguments)]

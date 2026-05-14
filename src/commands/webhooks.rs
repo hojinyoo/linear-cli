@@ -320,13 +320,22 @@ async fn get_webhook(id: &str, show_secret: bool, output: &OutputOptions) -> Res
 
     let wh: Webhook = serde_json::from_value(webhook.clone())?;
 
-    println!("{}", wh.label.as_deref().unwrap_or("Webhook").bold());
+    println!(
+        "{}",
+        safe_terminal_value(wh.label.as_deref().unwrap_or("Webhook")).bold()
+    );
     println!("{}", "-".repeat(40));
-    println!("URL: {}", wh.url.as_deref().unwrap_or("-"));
+    println!(
+        "URL: {}",
+        safe_terminal_value(wh.url.as_deref().unwrap_or("-"))
+    );
     println!("Enabled: {}", if wh.enabled { "Yes" } else { "No" });
 
     if !wh.resource_types.is_empty() {
-        println!("Events: {}", wh.resource_types.join(", "));
+        println!(
+            "Events: {}",
+            safe_terminal_value(&wh.resource_types.join(", "))
+        );
     }
 
     println!(
@@ -335,24 +344,28 @@ async fn get_webhook(id: &str, show_secret: bool, output: &OutputOptions) -> Res
     );
 
     if let Some(team) = &wh.team {
-        println!("Team: {} ({})", team.name, team.key);
+        println!(
+            "Team: {} ({})",
+            safe_terminal_value(&team.name),
+            safe_terminal_value(&team.key)
+        );
     }
 
     if let Some(creator) = &wh.creator {
-        println!("Creator: {}", creator.name);
+        println!("Creator: {}", safe_terminal_value(&creator.name));
     }
 
     if let Some(secret) = &wh.secret {
         if !secret.is_empty() {
             if show_secret {
-                println!("Secret: {}", secret);
+                println!("Secret: {}", safe_terminal_value(secret));
             } else {
                 println!("Secret: <redacted> (use --show-secret to reveal)");
             }
         }
     }
 
-    println!("ID: {}", wh.id);
+    println!("ID: {}", safe_terminal_value(&wh.id));
 
     if let Some(created) = &wh.created_at {
         println!("Created: {}", created.chars().take(10).collect::<String>());
@@ -411,7 +424,7 @@ async fn create_webhook(
             )?;
         } else {
             println!("{}", "[DRY RUN] Would create webhook:".yellow().bold());
-            println!("  URL: {}", url);
+            println!("  URL: {}", safe_terminal_value(url));
         }
         return Ok(());
     }
@@ -440,8 +453,14 @@ async fn create_webhook(
             return Ok(());
         }
         println!("{} Created webhook", "+".green(),);
-        println!("  ID: {}", webhook["id"].as_str().unwrap_or(""));
-        println!("  URL: {}", webhook["url"].as_str().unwrap_or(""));
+        println!(
+            "  ID: {}",
+            safe_terminal_value(webhook["id"].as_str().unwrap_or(""))
+        );
+        println!(
+            "  URL: {}",
+            safe_terminal_value(webhook["url"].as_str().unwrap_or(""))
+        );
         println!(
             "  Enabled: {}",
             if webhook["enabled"].as_bool() == Some(true) {
@@ -453,7 +472,7 @@ async fn create_webhook(
         if let Some(secret) = webhook["secret"].as_str() {
             if !secret.is_empty() {
                 if show_secret {
-                    println!("  Secret: {}", secret);
+                    println!("  Secret: {}", safe_terminal_value(secret));
                 } else {
                     println!("  Secret: <redacted> (use --show-secret to reveal)");
                 }
@@ -626,7 +645,7 @@ async fn rotate_secret(id: &str, show_secret: bool, output: &OutputOptions) -> R
         println!("{} Secret rotated for webhook: {}", "+".green(), id);
         if let Some(secret) = webhook["secret"].as_str() {
             if show_secret {
-                println!("  New secret: {}", secret);
+                println!("  New secret: {}", safe_terminal_value(secret));
             } else {
                 println!("  New secret: <redacted> (use --show-secret to reveal)");
             }
@@ -743,8 +762,12 @@ async fn listen(
         anyhow::bail!("Webhook secret was not returned; refusing to start unsigned listener");
     }
 
-    println!("{} Temporary webhook created: {}", "+".green(), webhook_id);
-    println!("  URL: {}", webhook_url);
+    println!(
+        "{} Temporary webhook created: {}",
+        "+".green(),
+        safe_terminal_value(&webhook_id)
+    );
+    println!("  URL: {}", safe_terminal_value(&webhook_url));
     println!("  Listening on port {}...", port);
     println!("  Press Ctrl+C to stop and clean up.\n");
 

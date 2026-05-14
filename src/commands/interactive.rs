@@ -9,6 +9,10 @@ use crate::display_options;
 use crate::priority::priority_to_string;
 use crate::text::truncate;
 
+fn safe_terminal_value(value: &str) -> String {
+    crate::text::sanitize_terminal_text(value)
+}
+
 #[derive(Debug, Clone)]
 struct Team {
     id: String,
@@ -363,15 +367,18 @@ async fn create_issue_interactive(client: &LinearClient, team: &Team) -> Result<
 
     if result["data"]["issueCreate"]["success"].as_bool() == Some(true) {
         let issue = &result["data"]["issueCreate"]["issue"];
-        let identifier = issue["identifier"].as_str().unwrap_or("");
-        let issue_title = issue["title"].as_str().unwrap_or("");
+        let identifier = safe_terminal_value(issue["identifier"].as_str().unwrap_or(""));
+        let issue_title = safe_terminal_value(issue["title"].as_str().unwrap_or(""));
         println!(
             "\n{} Created issue: {} {}",
             "+".green(),
             identifier.cyan(),
             issue_title
         );
-        println!("  URL: {}", issue["url"].as_str().unwrap_or(""));
+        println!(
+            "  URL: {}",
+            safe_terminal_value(issue["url"].as_str().unwrap_or(""))
+        );
     } else {
         anyhow::bail!("Failed to create issue");
     }
@@ -467,8 +474,8 @@ async fn view_issue_interactive(client: &LinearClient) -> Result<()> {
         return Ok(());
     }
 
-    let identifier = issue["identifier"].as_str().unwrap_or("");
-    let title = issue["title"].as_str().unwrap_or("");
+    let identifier = safe_terminal_value(issue["identifier"].as_str().unwrap_or(""));
+    let title = safe_terminal_value(issue["title"].as_str().unwrap_or(""));
     println!("\n{} {}", identifier.cyan().bold(), title.bold());
     println!("{}", "-".repeat(60));
 
@@ -481,7 +488,7 @@ async fn view_issue_interactive(client: &LinearClient) -> Result<()> {
 
     println!(
         "State:    {}",
-        issue["state"]["name"].as_str().unwrap_or("-")
+        safe_terminal_value(issue["state"]["name"].as_str().unwrap_or("-"))
     );
     println!(
         "Priority: {}",
@@ -489,11 +496,11 @@ async fn view_issue_interactive(client: &LinearClient) -> Result<()> {
     );
     println!(
         "Team:     {}",
-        issue["team"]["name"].as_str().unwrap_or("-")
+        safe_terminal_value(issue["team"]["name"].as_str().unwrap_or("-"))
     );
 
     if let Some(assignee) = issue["assignee"]["name"].as_str() {
-        println!("Assignee: {}", assignee);
+        println!("Assignee: {}", safe_terminal_value(assignee));
     } else {
         println!("Assignee: -");
     }
@@ -501,12 +508,19 @@ async fn view_issue_interactive(client: &LinearClient) -> Result<()> {
     let labels = issue["labels"]["nodes"].as_array();
     if let Some(labels) = labels {
         if !labels.is_empty() {
-            let label_names: Vec<&str> = labels.iter().filter_map(|l| l["name"].as_str()).collect();
+            let label_names: Vec<String> = labels
+                .iter()
+                .filter_map(|l| l["name"].as_str())
+                .map(safe_terminal_value)
+                .collect();
             println!("Labels:   {}", label_names.join(", "));
         }
     }
 
-    println!("\nURL: {}", issue["url"].as_str().unwrap_or("-"));
+    println!(
+        "\nURL: {}",
+        safe_terminal_value(issue["url"].as_str().unwrap_or("-"))
+    );
 
     Ok(())
 }

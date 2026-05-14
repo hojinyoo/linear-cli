@@ -120,15 +120,7 @@ pub async fn handle(cmd: BulkCommands, output: &OutputOptions) -> Result<()> {
 
 async fn bulk_update_state(state: &str, issues: Vec<String>, output: &OutputOptions) -> Result<()> {
     if issues.is_empty() {
-        if output.is_json() || output.has_template() {
-            print_json_owned(
-                json!({ "error": "No issues specified", "results": [] }),
-                output,
-            )?;
-        } else {
-            println!("No issues specified.");
-        }
-        return Ok(());
+        return missing_bulk_issues("linear bulk update-state Done -i LIN-1,LIN-2");
     }
 
     if !output.is_json() && !output.has_template() {
@@ -162,15 +154,7 @@ async fn bulk_update_state(state: &str, issues: Vec<String>, output: &OutputOpti
 
 async fn bulk_assign(user: &str, issues: Vec<String>, output: &OutputOptions) -> Result<()> {
     if issues.is_empty() {
-        if output.is_json() || output.has_template() {
-            print_json_owned(
-                json!({ "error": "No issues specified", "results": [] }),
-                output,
-            )?;
-        } else {
-            println!("No issues specified.");
-        }
-        return Ok(());
+        return missing_bulk_issues("linear bulk assign me -i LIN-1,LIN-2");
     }
 
     if !output.is_json() && !output.has_template() {
@@ -217,15 +201,7 @@ async fn bulk_assign(user: &str, issues: Vec<String>, output: &OutputOptions) ->
 
 async fn bulk_label(label: &str, issues: Vec<String>, output: &OutputOptions) -> Result<()> {
     if issues.is_empty() {
-        if output.is_json() || output.has_template() {
-            print_json_owned(
-                json!({ "error": "No issues specified", "results": [] }),
-                output,
-            )?;
-        } else {
-            println!("No issues specified.");
-        }
-        return Ok(());
+        return missing_bulk_issues("linear bulk label bug -i LIN-1,LIN-2");
     }
 
     if !output.is_json() && !output.has_template() {
@@ -272,15 +248,7 @@ async fn bulk_label(label: &str, issues: Vec<String>, output: &OutputOptions) ->
 
 async fn bulk_unassign(issues: Vec<String>, output: &OutputOptions) -> Result<()> {
     if issues.is_empty() {
-        if output.is_json() || output.has_template() {
-            print_json_owned(
-                json!({ "error": "No issues specified", "results": [] }),
-                output,
-            )?;
-        } else {
-            println!("No issues specified.");
-        }
-        return Ok(());
+        return missing_bulk_issues("linear bulk unassign -i LIN-1,LIN-2");
     }
 
     if !output.is_json() && !output.has_template() {
@@ -301,6 +269,13 @@ async fn bulk_unassign(issues: Vec<String>, output: &OutputOptions) -> Result<()
     print_summary(&results, "unassigned", output);
 
     Ok(())
+}
+
+fn missing_bulk_issues(example: &str) -> Result<()> {
+    anyhow::bail!(
+        "No issues specified. Provide issue IDs with -i/--issues.\nExample: {}",
+        example
+    );
 }
 
 async fn update_issue_state(

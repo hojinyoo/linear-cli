@@ -85,7 +85,9 @@ async fn list_comments(issue_ids: &[String], output: &OutputOptions) -> Result<(
     let final_ids = read_ids_from_stdin(issue_ids.to_vec());
 
     if final_ids.is_empty() {
-        anyhow::bail!("No issue IDs provided. Provide IDs or pipe them via stdin.");
+        anyhow::bail!(
+            "No issue IDs provided. Provide IDs as arguments or pipe them via stdin.\nExamples:\n  linear comments list LIN-123\n  printf '%s\\n' LIN-123 LIN-456 | linear comments list -"
+        );
     }
 
     let client = LinearClient::new()?;

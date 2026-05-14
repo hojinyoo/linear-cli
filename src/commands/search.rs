@@ -11,6 +11,10 @@ use crate::output::{
 use crate::pagination::paginate_nodes;
 use crate::text::truncate;
 
+fn safe_terminal_value(value: &str) -> String {
+    crate::text::sanitize_terminal_text(value)
+}
+
 #[derive(Subcommand)]
 pub enum SearchCommands {
     /// Search issues by query string
@@ -145,7 +149,7 @@ async fn search_issues(query: &str, include_archived: bool, output: &OutputOptio
             IssueRow {
                 identifier: issue["identifier"].as_str().unwrap_or("").to_string(),
                 title: truncate(issue["title"].as_str().unwrap_or(""), width),
-                state: issue["state"]["name"].as_str().unwrap_or("-").to_string(),
+                state: safe_terminal_value(issue["state"]["name"].as_str().unwrap_or("-")),
                 priority,
                 id: issue["id"].as_str().unwrap_or("").to_string(),
             }
@@ -236,7 +240,7 @@ async fn search_projects(
 
             ProjectRow {
                 name: truncate(p["name"].as_str().unwrap_or(""), name_width),
-                status: p["status"]["name"].as_str().unwrap_or("-").to_string(),
+                status: safe_terminal_value(p["status"]["name"].as_str().unwrap_or("-")),
                 labels: if labels.is_empty() {
                     "-".to_string()
                 } else {

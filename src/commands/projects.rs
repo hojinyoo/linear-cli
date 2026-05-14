@@ -15,6 +15,10 @@ use crate::pagination::paginate_nodes;
 use crate::text::{is_uuid, truncate};
 use crate::types::Project;
 
+fn safe_terminal_value(value: &str) -> String {
+    crate::text::sanitize_terminal_text(value)
+}
+
 #[derive(Subcommand)]
 pub enum ProjectCommands {
     /// List all projects
@@ -218,7 +222,9 @@ pub async fn handle(cmd: ProjectCommands, output: &OutputOptions) -> Result<()> 
         ProjectCommands::Get { ids } => {
             let final_ids = read_ids_from_stdin(ids);
             if final_ids.is_empty() {
-                anyhow::bail!("No project IDs provided. Provide IDs or pipe them via stdin.");
+                anyhow::bail!(
+                    "No project IDs provided. Provide IDs as arguments or pipe them via stdin.\nExamples:\n  linear projects get PROJECT_ID\n  printf '%s\\n' PROJECT_ID OTHER_PROJECT_ID | linear projects get -"
+                );
             }
             get_projects(&final_ids, output).await
         }
@@ -552,26 +558,32 @@ async fn get_project(id: &str, output: &OutputOptions) -> Result<()> {
 
     let proj: Project = serde_json::from_value(project.clone())?;
 
-    println!("{}", proj.name.bold());
+    println!("{}", safe_terminal_value(&proj.name).bold());
     println!("{}", "-".repeat(40));
 
     if let Some(desc) = &proj.description {
         if !desc.is_empty() {
-            println!(
-                "Description: {}",
-                desc.chars().take(100).collect::<String>()
-            );
+            println!("Description: {}", truncate(desc, Some(100)));
         }
     }
 
     println!(
         "Status: {}",
-        proj.status.as_ref().map(|s| s.name.as_str()).unwrap_or("-")
+        safe_terminal_value(proj.status.as_ref().map(|s| s.name.as_str()).unwrap_or("-"))
     );
-    println!("Color: {}", proj.color.as_deref().unwrap_or("-"));
-    println!("Icon: {}", proj.icon.as_deref().unwrap_or("-"));
-    println!("URL: {}", proj.url.as_deref().unwrap_or("-"));
-    println!("ID: {}", proj.id);
+    println!(
+        "Color: {}",
+        safe_terminal_value(proj.color.as_deref().unwrap_or("-"))
+    );
+    println!(
+        "Icon: {}",
+        safe_terminal_value(proj.icon.as_deref().unwrap_or("-"))
+    );
+    println!(
+        "URL: {}",
+        safe_terminal_value(proj.url.as_deref().unwrap_or("-"))
+    );
+    println!("ID: {}", safe_terminal_value(&proj.id));
 
     if let Some(label_conn) = &proj.labels {
         if !label_conn.nodes.is_empty() {
@@ -579,9 +591,13 @@ async fn get_project(id: &str, output: &OutputOptions) -> Result<()> {
             for label in &label_conn.nodes {
                 let parent_name = label.parent.as_ref().map(|p| p.name.as_str()).unwrap_or("");
                 if parent_name.is_empty() {
-                    println!("  - {}", label.name);
+                    println!("  - {}", safe_terminal_value(&label.name));
                 } else {
-                    println!("  - {} > {}", parent_name.dimmed(), label.name);
+                    println!(
+                        "  - {} > {}",
+                        safe_terminal_value(parent_name).dimmed(),
+                        safe_terminal_value(&label.name)
+                    );
                 }
             }
         }
@@ -792,10 +808,16 @@ async fn create_project(
         println!(
             "{} Created project: {}",
             "+".green(),
-            project["name"].as_str().unwrap_or("")
+            safe_terminal_value(project["name"].as_str().unwrap_or(""))
         );
-        println!("  ID: {}", project["id"].as_str().unwrap_or(""));
-        println!("  URL: {}", project["url"].as_str().unwrap_or(""));
+        println!(
+            "  ID: {}",
+            safe_terminal_value(project["id"].as_str().unwrap_or(""))
+        );
+        println!(
+            "  URL: {}",
+            safe_terminal_value(project["url"].as_str().unwrap_or(""))
+        );
 
         // Invalidate projects cache after successful create
         let _ = Cache::new().and_then(|c| c.clear_type(CacheType::Projects));
@@ -1044,7 +1066,11 @@ async fn add_labels(id: &str, label_ids: Vec<String>, output: &OutputOptions) ->
             .iter()
             .filter_map(|l| l["name"].as_str())
             .collect();
-        println!("{} Labels updated: {}", "+".green(), labels.join(", "));
+        println!(
+            "{} Labels updated: {}",
+            "+".green(),
+            safe_terminal_value(&labels.join(", "))
+        );
     } else {
         anyhow::bail!("Failed to add labels");
     }

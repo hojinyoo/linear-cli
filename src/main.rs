@@ -467,9 +467,9 @@ enum Commands {
     /// Bulk operations - update multiple issues at once
     #[command(alias = "b")]
     #[command(after_help = r#"EXAMPLES:
-    linear bulk update -s Done LIN-1 LIN-2  # Update multiple issues
-    linear b assign --user me LIN-1 LIN-2   # Assign multiple issues
-    linear b label --add bug LIN-1 LIN-2    # Add label to issues"#)]
+    linear bulk update-state Done -i LIN-1,LIN-2  # Update multiple issues
+    linear b assign me -i LIN-1,LIN-2             # Assign multiple issues
+    linear b label bug -i LIN-1,LIN-2             # Add label to issues"#)]
     Bulk {
         #[command(subcommand)]
         action: bulk::BulkCommands,
@@ -500,7 +500,7 @@ enum Commands {
     #[command(alias = "tpl")]
     #[command(after_help = r#"EXAMPLES:
     linear templates list                   # List all templates
-    linear tpl create bug                   # Create a new template
+    linear tpl create bug --team ENG --priority 2 --label bug
     linear tpl show bug                     # View template details"#)]
     Templates {
         #[command(subcommand)]

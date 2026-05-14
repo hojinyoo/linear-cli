@@ -11,6 +11,10 @@ use crate::output::{
 };
 use crate::text::truncate;
 
+fn safe_terminal_value(value: &str) -> String {
+    crate::text::sanitize_terminal_text(value)
+}
+
 #[derive(Subcommand)]
 pub enum AttachmentCommands {
     /// List attachments for an issue
@@ -243,23 +247,23 @@ async fn get_attachment(id: &str, output: &OutputOptions) -> Result<()> {
         return Ok(());
     }
 
-    let title = raw["title"].as_str().unwrap_or("-");
+    let title = safe_terminal_value(raw["title"].as_str().unwrap_or("-"));
     println!("{}", title.bold());
     println!("{}", "-".repeat(40));
 
     if let Some(issue_id) = raw["issue"]["identifier"].as_str() {
-        println!("Issue: {}", issue_id);
+        println!("Issue: {}", safe_terminal_value(issue_id));
     }
     if let Some(subtitle) = raw["subtitle"].as_str() {
         if !subtitle.is_empty() {
-            println!("Subtitle: {}", subtitle);
+            println!("Subtitle: {}", safe_terminal_value(subtitle));
         }
     }
     if let Some(url) = raw["url"].as_str() {
-        println!("URL: {}", url);
+        println!("URL: {}", safe_terminal_value(url));
     }
     if let Some(source) = raw["sourceType"].as_str() {
-        println!("Source: {}", source);
+        println!("Source: {}", safe_terminal_value(source));
     }
     println!(
         "Created: {}",
@@ -325,10 +329,16 @@ async fn create_attachment(
         println!(
             "{} Attachment created: {}",
             "+".green(),
-            attachment["title"].as_str().unwrap_or("")
+            safe_terminal_value(attachment["title"].as_str().unwrap_or(""))
         );
-        println!("  ID: {}", attachment["id"].as_str().unwrap_or(""));
-        println!("  URL: {}", attachment["url"].as_str().unwrap_or(""));
+        println!(
+            "  ID: {}",
+            safe_terminal_value(attachment["id"].as_str().unwrap_or(""))
+        );
+        println!(
+            "  URL: {}",
+            safe_terminal_value(attachment["url"].as_str().unwrap_or(""))
+        );
     } else {
         anyhow::bail!("Failed to create attachment");
     }
@@ -381,7 +391,10 @@ async fn update_attachment(
             return Ok(());
         }
         println!("{} Attachment updated", "+".green());
-        println!("  ID: {}", attachment["id"].as_str().unwrap_or(""));
+        println!(
+            "  ID: {}",
+            safe_terminal_value(attachment["id"].as_str().unwrap_or(""))
+        );
     } else {
         anyhow::bail!("Failed to update attachment");
     }
@@ -456,12 +469,34 @@ async fn link_url(
             return Ok(());
         }
         println!("{} URL linked to issue", "+".green());
-        println!("  ID: {}", attachment["id"].as_str().unwrap_or(""));
-        println!("  Title: {}", attachment["title"].as_str().unwrap_or("-"));
-        println!("  URL: {}", attachment["url"].as_str().unwrap_or(""));
+        println!(
+            "  ID: {}",
+            safe_terminal_value(attachment["id"].as_str().unwrap_or(""))
+        );
+        println!(
+            "  Title: {}",
+            safe_terminal_value(attachment["title"].as_str().unwrap_or("-"))
+        );
+        println!(
+            "  URL: {}",
+            safe_terminal_value(attachment["url"].as_str().unwrap_or(""))
+        );
     } else {
         anyhow::bail!("Failed to link URL to issue");
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_safe_terminal_value_removes_escape_sequences() {
+        assert_eq!(
+            safe_terminal_value("bad\u{1b}]52;c;ZXZpbA==\u{7}title"),
+            "badtitle"
+        );
+    }
 }

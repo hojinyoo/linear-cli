@@ -260,6 +260,10 @@ fn value_to_string(value: &Value) -> String {
     }
 }
 
+fn terminal_value_to_string(value: &Value) -> String {
+    crate::text::sanitize_terminal_text(&value_to_string(value))
+}
+
 fn template_regex() -> &'static Regex {
     static REGEX: OnceLock<Regex> = OnceLock::new();
     REGEX.get_or_init(|| Regex::new(r"\{\{\s*\.?([a-zA-Z0-9_.-]*)\s*\}\}").unwrap())
@@ -291,11 +295,11 @@ fn render_template(template: &str, value: &Value) -> String {
         .replace_all(template, |caps: &regex::Captures| {
             let path = caps.get(1).map(|m| m.as_str()).unwrap_or("");
             if path.is_empty() || path == "." {
-                return value_to_string(value);
+                return terminal_value_to_string(value);
             }
             let parts: Vec<&str> = path.split('.').filter(|p| !p.is_empty()).collect();
             match get_path(value, &parts) {
-                Some(found) => value_to_string(found),
+                Some(found) => terminal_value_to_string(found),
                 None => String::new(),
             }
         })
@@ -789,5 +793,19 @@ mod tests {
         let value = json!({"name": "Test"});
         let result = render_template("{{ name }}", &value);
         assert_eq!(result, "Test");
+    }
+
+    #[test]
+    fn test_render_template_sanitizes_terminal_control_sequences() {
+        let value = json!({
+            "title": "bad\u{1b}]52;c;ZXZpbA==\u{7}title",
+            "state": {
+                "name": "\u{1b}[31mDone\u{1b}[0m"
+            }
+        });
+        let result = render_template("{{title}} {{state.name}}", &value);
+        assert_eq!(result, "badtitle Done");
+        assert!(!result.contains('\u{1b}'));
+        assert!(!result.contains('\u{7}'));
     }
 }
