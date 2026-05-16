@@ -1282,7 +1282,7 @@ fn test_count_only_flag_exists() {
 #[test]
 fn test_dry_run_output() {
     // dry-run on create should not actually create, just preview
-    let (code, stdout, _stderr) = run_cli(&[
+    let (code, stdout, stderr) = run_cli(&[
         "issues",
         "create",
         "Test dry run",
@@ -1292,9 +1292,23 @@ fn test_dry_run_output() {
     ]);
     // Should fail with auth error (no valid API key) but the flag should be accepted
     // If the CLI parses --dry-run without error before API call, that's correct behavior
+    let combined = format!("{stdout}\n{stderr}");
+    let parser_diagnostics = [
+        "unexpected argument",
+        "required arguments were not provided",
+        "invalid value",
+        "Usage:",
+        "For more information, try '--help'",
+    ];
     assert!(
-        code != 0 || stdout.contains("dry_run") || stdout.contains("DRY RUN"),
-        "dry-run should either output preview or fail at API level, not at arg parsing"
+        !parser_diagnostics
+            .iter()
+            .any(|diagnostic| combined.contains(diagnostic)),
+        "dry-run should not fail at argument parsing; stdout={stdout:?} stderr={stderr:?}"
+    );
+    assert!(
+        code != 0 || combined.contains("dry_run") || combined.contains("DRY RUN"),
+        "dry-run should either output preview or fail after parsing; stdout={stdout:?} stderr={stderr:?}"
     );
 }
 
@@ -1885,11 +1899,16 @@ fn test_complete_requires_type() {
 
 #[test]
 fn test_complete_unknown_type() {
-    // An unknown type should either fail gracefully at the API level or return empty results
-    // Since it needs auth, it will fail, but the flag should be accepted at parse time
-    let (code, _stdout, _stderr) = run_cli(&["_complete", "--type", "nonexistent_type_xyz"]);
-    // Should not crash — any exit code is acceptable (auth failure, unknown type, etc.)
-    let _ = code;
+    let (code, stdout, stderr) = run_cli(&["_complete", "--type", "nonexistent_type_xyz"]);
+    assert_eq!(code, 0, "unknown completion type should exit gracefully");
+    assert!(
+        stdout.trim().is_empty(),
+        "unknown completion type should return no completions"
+    );
+    assert!(
+        stderr.trim().is_empty(),
+        "unknown completion type should not emit parser or panic output"
+    );
 }
 
 // === Teams CRUD ===
