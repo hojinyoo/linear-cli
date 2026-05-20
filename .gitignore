@@ -2,6 +2,7 @@
 ._*
 .DS_Store
 .clawpatch/
+.ai-review/
 
 # Claude Code local settings (not skills)
 .claude/settings.local.json
