@@ -33,7 +33,12 @@ fn test_update_in_top_level_help() {
 fn test_version_command() {
     let (code, stdout, _stderr) = run_cli(&["--version"]);
     assert_eq!(code, 0);
-    assert!(stdout.contains("linear") || stdout.contains("0.1"));
+    // Version output should report the actual crate version, not a stale literal.
+    let expected = env!("CARGO_PKG_VERSION");
+    assert!(
+        stdout.contains(expected),
+        "version output {stdout:?} should contain crate version {expected}"
+    );
 }
 
 #[test]
