@@ -10,7 +10,7 @@ The easiest way to integrate linear-cli with your AI agent:
 npx skills add Finesssee/linear-cli
 ```
 
-This installs **27 Agent Skills** covering all CLI features. Your agent automatically loads the right skill based on the task.
+This installs **38 Agent Skills** covering all CLI features. Your agent automatically loads the right skill based on the task.
 
 See [skills.md](skills.md) for the full list of available skills.
 
@@ -22,7 +22,7 @@ See [skills.md](skills.md) for the full list of available skills.
 | Latency | Single CLI execution | Multiple MCP round-trips |
 | Feature coverage | Full API | Limited subset |
 | Offline caching | Supported | Not available |
-| Agent Skills | 27 skills included | Not available |
+| Agent Skills | 38 skills included | Not available |
 
 ## Ready-to-Copy Agent Rules
 
@@ -104,7 +104,7 @@ SCHEMAS: JSON samples in docs/json/
 | Create branch | `g checkout` | `linear-cli g checkout LIN-123` |
 | Create PR | `g pr` | `linear-cli g pr LIN-123 --draft` |
 | Search | `s issues` | `linear-cli s issues "auth bug"` |
-| Bulk ops | `b update` | `linear-cli b update -s Done LIN-1 LIN-2` |
+| Bulk ops | `b update-state` | `linear-cli b update-state Done -i LIN-1,LIN-2` |
 | Fetch upload | `up fetch` | `linear-cli up fetch URL -f image.png` |
 
 ## One-Liner Setup

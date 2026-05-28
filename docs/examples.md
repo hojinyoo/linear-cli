@@ -62,11 +62,14 @@ linear-cli g pr LIN-123 --base main            # Specify base branch
 
 ## jj (Jujutsu) Integration
 
+The git subcommands auto-detect Jujutsu repositories. Pass `--vcs jj` to force it.
+
 ```bash
-linear-cli j checkout LIN-123                  # Create bookmark for issue
-linear-cli j bookmark LIN-123                  # Show bookmark name for issue
-linear-cli j create LIN-123                    # Create bookmark without checkout
-linear-cli j pr LIN-123                        # Create PR using jj git push
+linear-cli g checkout LIN-123 --vcs jj         # Create bookmark for issue
+linear-cli g branch LIN-123 --vcs jj           # Show bookmark name for issue
+linear-cli g create LIN-123 --vcs jj           # Create bookmark without checkout
+linear-cli g commits --vcs jj                  # Show commits with Linear trailers
+linear-cli g pr LIN-123 --vcs jj               # Create PR using jj git push
 ```
 
 ## Sync Local Folders
@@ -143,31 +146,31 @@ linear-cli config show
 ## Interactive Mode
 
 ```bash
-linear-cli ui                                  # Launch interactive TUI
-linear-cli ui --team ENG                       # Launch with preselected team
-linear-cli ui issues                           # Browse issues interactively
-linear-cli ui projects                         # Browse projects interactively
-linear-cli interactive --team Engineering      # Filter by team
+linear-cli interactive                         # Launch interactive TUI
+linear-cli int --team ENG                      # Launch with preselected team (alias: int)
 ```
 
 ## Multiple Workspaces
 
+Workspaces are managed through `config workspace-*` subcommands.
+
 ```bash
-linear-cli ws list                             # List configured workspaces
-linear-cli ws add personal                     # Add a new workspace
-linear-cli ws switch personal                  # Switch active workspace
-linear-cli ws current                          # Show current workspace
-linear-cli ws remove personal                  # Remove a workspace
+linear-cli config workspace-list               # List configured workspaces
+printf '%s\n' "$LINEAR_API_KEY" | linear-cli config workspace-add personal  # Add a workspace
+linear-cli config workspace-switch personal    # Switch active workspace
+linear-cli config workspace-current            # Show current workspace
+linear-cli config workspace-remove personal    # Remove a workspace
 ```
 
 ## Bulk Operations
 
+Issues are passed with `-i` as a comma-separated list.
+
 ```bash
-linear-cli b update -s Done LIN-1 LIN-2 LIN-3  # Update multiple issues
-linear-cli b assign --user me LIN-1 LIN-2      # Assign multiple issues
-linear-cli b label --add bug LIN-1 LIN-2       # Add label to multiple issues
-linear-cli b move --project "Q1" LIN-1 LIN-2   # Move issues to project
-linear-cli b delete --force LIN-1 LIN-2 LIN-3  # Delete multiple issues
+linear-cli b update-state Done -i LIN-1,LIN-2,LIN-3   # Update status for multiple issues
+linear-cli b assign me -i LIN-1,LIN-2                 # Assign multiple issues
+linear-cli b label bug -i LIN-1,LIN-2                 # Add label to multiple issues
+linear-cli b unassign -i LIN-1,LIN-2                  # Unassign multiple issues
 ```
 
 ## JSON Output

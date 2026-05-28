@@ -3,7 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/linear-cli)](https://crates.io/crates/linear-cli)
 [![CI](https://github.com/Finesssee/linear-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/Finesssee/linear-cli/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/rust-1.83%2B-orange.svg)](https://www.rust-lang.org/)
 
 A fast, comprehensive command-line interface for [Linear](https://linear.app) built in Rust. Manage issues, projects, cycles, sprints, documents, and more -- entirely from your terminal.
 
@@ -329,8 +329,8 @@ Poll for real-time changes to issues, projects, or teams.
 
 ```bash
 linear-cli watch issue LIN-123                   # Watch an issue
-linear-cli w project PROJECT_ID                  # Watch a project
-linear-cli w team ENG                            # Watch a team
+linear-cli watch project PROJECT_ID              # Watch a project
+linear-cli watch team ENG                        # Watch a team
 ```
 
 ### Triage
@@ -385,8 +385,8 @@ linear-cli export projects-csv -f projects.csv   # Export projects to CSV
 linear-cli search issues "auth bug"              # Search issues
 linear-cli s projects "platform"                 # Search projects
 linear-cli context                               # Issue from current git branch
-linear-cli history LIN-123                       # Activity timeline
-linear-cli metrics -t ENG                        # Team velocity and stats
+linear-cli history issue LIN-123                 # Activity timeline
+linear-cli metrics velocity ENG                  # Team velocity and stats
 ```
 
 ### Raw GraphQL
@@ -449,8 +449,8 @@ Config is stored at `~/.config/linear-cli/config.toml` (Linux/macOS) or `%APPDAT
 
 ```bash
 linear-cli config show                           # Show current config
-linear-cli config get default_team               # Get a value
-linear-cli config set default_team ENG           # Set a value
+linear-cli config get api-key                    # Get a value (api-key, profile)
+linear-cli config set profile work               # Set the active profile
 
 # Multiple workspaces
 linear-cli config workspace-add work             # Add workspace profile
