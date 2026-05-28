@@ -2,11 +2,18 @@
 
 Use this guide when GitHub Actions is unavailable or when release assets need to be backfilled by hand.
 
+> Automated releases differ slightly: the `Release` workflow triggers on GitHub
+> release creation, so it builds and attaches binaries first and then runs
+> `cargo publish` as the final step. The crate is published from a clean checkout
+> of the tag (no `--allow-dirty`). The manual order below ("publish first") applies
+> to hand-run backfills, where the GitHub release may not exist yet.
+
 ## Rules
 
-1. Publish the crate to crates.io before creating or updating the matching GitHub release.
+1. For manual backfills, publish the crate to crates.io before creating or updating the matching GitHub release.
 2. Only attach binaries built from the exact source for that version tag.
 3. Keep Windows release assets on `x86_64-pc-windows-msvc` so `cargo-binstall` metadata stays correct.
+4. Publish from a clean checkout of the tagged commit; never use `cargo publish --allow-dirty`.
 
 ## Version Order
 

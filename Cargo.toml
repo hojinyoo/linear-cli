@@ -2,6 +2,7 @@
 name = "linear-cli"
 version = "0.3.25"
 edition = "2021"
+rust-version = "1.83"
 description = "A powerful CLI for Linear.app - manage issues, projects, cycles, and more from your terminal"
 authors = ["scwrcd"]
 license = "MIT"

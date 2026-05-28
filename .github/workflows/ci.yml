@@ -27,13 +27,35 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Run tests
-        run: cargo test --verbose
+        run: cargo test --locked --verbose
+
+      - name: Run tests (all features)
+        run: cargo test --locked --all-features --verbose
 
       - name: Check formatting
         run: cargo fmt --check
 
       - name: Run clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --locked -- -D warnings
+
+      - name: Run clippy (all features)
+        run: cargo clippy --locked --all-features -- -D warnings
+
+  msrv:
+    name: MSRV (1.83.0)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.83.0
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build on MSRV
+        run: cargo build --locked --all-features
 
   build:
     name: Build
@@ -49,4 +71,4 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Build release
-        run: cargo build --release
+        run: cargo build --release --locked
