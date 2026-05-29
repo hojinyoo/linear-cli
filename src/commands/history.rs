@@ -38,11 +38,8 @@ pub async fn handle(cmd: HistoryCommands, output: &OutputOptions) -> Result<()> 
     }
 }
 
-async fn issue_history(id: &str, limit: usize, output: &OutputOptions) -> Result<()> {
-    let client = LinearClient::new()?;
-
-    // First get the issue ID if identifier provided
-    let issue_query = r#"
+fn issue_history_query() -> &'static str {
+    r#"
         query($id: String!, $limit: Int!) {
             issue(id: $id) {
                 id
@@ -63,18 +60,21 @@ async fn issue_history(id: &str, limit: usize, output: &OutputOptions) -> Result
                         toEstimate
                         addedLabels { name }
                         removedLabels { name }
-                        relationChanges {
-                            type
-                            issue { identifier }
-                        }
                     }
                 }
             }
         }
-    "#;
+    "#
+}
+
+async fn issue_history(id: &str, limit: usize, output: &OutputOptions) -> Result<()> {
+    let client = LinearClient::new()?;
 
     let result = client
-        .query(issue_query, Some(json!({ "id": id, "limit": limit })))
+        .query(
+            issue_history_query(),
+            Some(json!({ "id": id, "limit": limit })),
+        )
         .await?;
     let issue = &result["data"]["issue"];
 
@@ -203,4 +203,22 @@ async fn issue_history(id: &str, limit: usize, output: &OutputOptions) -> Result
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::issue_history_query;
+
+    #[test]
+    fn issue_history_query_omits_relation_changes() {
+        let query = issue_history_query();
+
+        assert!(
+            !query.contains("relationChanges"),
+            "relationChanges.issue is invalid on IssueRelationHistoryPayload"
+        );
+        assert!(query.contains("history(first: $limit)"));
+        assert!(query.contains("fromState { name }"));
+        assert!(query.contains("removedLabels { name }"));
+    }
 }
