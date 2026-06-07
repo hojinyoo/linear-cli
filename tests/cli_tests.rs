@@ -2142,3 +2142,78 @@ fn test_yes_flag_works_with_subcommand() {
         "--yes flag should not interfere with subcommand parsing"
     );
 }
+
+// ---- Exit-code / JSON-error contract (agent ergonomics) ----
+//
+// These verify the central contract offline: a failing command exits non-zero,
+// and under `--output json` the `{"error":true,...}` body is emitted on stderr
+// while stdout stays clean. They use the `bulk label` empty-issues path, which
+// is a logical failure reached before any network/keyring/config access, so the
+// assertions are deterministic with no credentials. The credential-dependent
+// handler-swallow paths (bulk resolution returning Err, mixed batch failures)
+// are verified end-to-end with live keys, since the harness does not mock the
+// Linear API.
+
+/// Run the CLI with an isolated, empty config home and no ambient credentials,
+/// so error paths are deterministic and fully offline. Each call gets a unique
+/// HOME so parallel tests never share config/cache state.
+fn run_cli_isolated(args: &[&str]) -> (i32, String, String) {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static COUNTER: AtomicUsize = AtomicUsize::new(0);
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let tmp = std::env::temp_dir().join(format!("linear-cli-isolated-{}-{}", std::process::id(), n));
+    let _ = std::fs::create_dir_all(&tmp);
+    let output = Command::new(env!("CARGO_BIN_EXE_linear-cli"))
+        .args(args)
+        .env("HOME", &tmp)
+        .env("XDG_CONFIG_HOME", &tmp)
+        .env_remove("LINEAR_API_KEY")
+        .env_remove("LINEAR_CLI_PROFILE")
+        .output()
+        .expect("Failed to execute command");
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let code = output.status.code().unwrap_or(-1);
+
+    (code, stdout, stderr)
+}
+
+#[test]
+fn test_failing_command_exits_nonzero() {
+    // `bulk label <name>` with no issues is a logical failure; it must NOT
+    // exit 0 (the agent-ergonomics regression: errors used to exit 0).
+    let (code, _stdout, stderr) = run_cli_isolated(&["bulk", "label", "Bug"]);
+    assert_ne!(code, 0, "a failing command must exit non-zero; stderr={stderr}");
+    assert!(
+        (1..=4).contains(&code),
+        "exit code should be a documented error code (1-4), got {code}"
+    );
+}
+
+#[test]
+fn test_json_error_body_emitted_on_stderr_not_stdout() {
+    // On the empty-issues path stdout is necessarily empty, so the stdout-clean
+    // assertion below is trivially satisfied here; the meaningful "results on
+    // stdout + error on stderr" stream split and the any-item-failure
+    // aggregation are unit-tested in src/commands/{bulk,issues,comments}.rs
+    // (bulk_exit_status / multi_get_status / comments_status).
+    let (code, stdout, stderr) =
+        run_cli_isolated(&["bulk", "label", "Bug", "--output", "json"]);
+    assert_ne!(code, 0, "failing command must exit non-zero");
+    assert!(
+        stderr.contains("\"error\":true"),
+        "stderr should carry the JSON error body, got: {stderr}"
+    );
+    assert!(
+        !stdout.contains("\"error\":true"),
+        "stdout must not carry a second JSON error body, got: {stdout}"
+    );
+}
+
+#[test]
+fn test_successful_command_exits_zero() {
+    let (code, stdout, _stderr) = run_cli_isolated(&["--version"]);
+    assert_eq!(code, 0, "a successful command must exit 0");
+    assert!(!stdout.is_empty());
+}
