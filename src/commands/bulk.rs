@@ -10,7 +10,7 @@ use tokio::sync::Mutex;
 
 use crate::api::{resolve_label_id, resolve_state_id, resolve_user_id, LinearClient};
 use crate::display_options;
-use crate::error::CliError;
+use crate::error::{self, CliError};
 use crate::output::{print_json_owned, OutputOptions};
 use crate::text::truncate;
 
@@ -168,13 +168,12 @@ async fn bulk_assign(user: &str, issues: Vec<String>, output: &OutputOptions) ->
 
     let client = LinearClient::new()?;
 
-    // Resolve the user ID once upfront. Resolution failure is a hard error
-    // (no issues can be processed), so it must return Err — the central handler
-    // in main.rs prints the message / JSON error body on stderr and sets a
-    // non-zero exit code.
+    // Resolution failure is a hard error: return Err, preserving the kind.
     let user_id = resolve_user_id(&client, user, &output.cache)
         .await
-        .map_err(|e| wrap_resolve_error("user", user, e))?;
+        .map_err(|e| {
+            error::rewrap_with_message(&e, format!("Failed to resolve user '{user}': {e}"))
+        })?;
 
     let results: Vec<_> = stream::iter(issues.iter())
         .map(|issue_id| {
@@ -206,13 +205,12 @@ async fn bulk_label(label: &str, issues: Vec<String>, output: &OutputOptions) ->
 
     let client = LinearClient::new()?;
 
-    // Resolve the label ID once upfront. Resolution failure is a hard error
-    // (no issues can be processed), so it must return Err — the central handler
-    // in main.rs prints the message / JSON error body on stderr and sets a
-    // non-zero exit code.
+    // Resolution failure is a hard error: return Err, preserving the kind.
     let label_id = resolve_label_id(&client, label, &output.cache)
         .await
-        .map_err(|e| wrap_resolve_error("label", label, e))?;
+        .map_err(|e| {
+            error::rewrap_with_message(&e, format!("Failed to resolve label '{label}': {e}"))
+        })?;
 
     let results: Vec<_> = stream::iter(issues.iter())
         .map(|issue_id| {
@@ -602,11 +600,7 @@ fn print_summary(results: &[BulkResult], action: &str, output: &OutputOptions) {
     );
 }
 
-/// Exit status for a bulk operation: `Err` if any item failed, so the process
-/// exits non-zero. Per-item results are printed by `print_summary` first
-/// (stdout); the aggregate error is emitted by `main.rs` on stderr. Any single
-/// failed item is enough to fail the command — partial success is failure for
-/// an orchestrator trusting `$?`.
+/// `Err` if any item failed, so partial failures still exit non-zero.
 fn bulk_exit_status(results: &[BulkResult]) -> Result<()> {
     let failed = results.iter().filter(|r| !r.success).count();
     if failed > 0 {
@@ -618,22 +612,6 @@ fn bulk_exit_status(results: &[BulkResult]) -> Result<()> {
         .into());
     }
     Ok(())
-}
-
-/// Wrap a resolution failure, preserving the original `CliError` kind/retry hint
-/// where present so the exit code stays accurate (e.g. a rate-limited resolution
-/// keeps code 4 + retry_after instead of degrading to a string-matched code).
-fn wrap_resolve_error(kind: &str, name: &str, e: anyhow::Error) -> anyhow::Error {
-    if let Some(cli) = e.downcast_ref::<CliError>() {
-        let mut wrapped = CliError::new(cli.kind, format!("Failed to resolve {} '{}': {}", kind, name, e))
-            .with_retry_after(cli.retry_after);
-        if let Some(details) = &cli.details {
-            wrapped = wrapped.with_details(details.clone());
-        }
-        wrapped.into()
-    } else {
-        anyhow::anyhow!("Failed to resolve {} '{}': {}", kind, name, e)
-    }
 }
 
 #[cfg(test)]
@@ -662,30 +640,11 @@ mod tests {
     #[test]
     fn bulk_exit_status_errs_on_any_failure() {
         let err = bulk_exit_status(&[result(true), result(false)]).unwrap_err();
-        assert_eq!(
-            err.downcast_ref::<CliError>().expect("CliError").code(),
-            1
-        );
+        assert_eq!(err.downcast_ref::<CliError>().expect("CliError").code(), 1);
     }
 
     #[test]
     fn bulk_exit_status_errs_when_all_fail() {
         assert!(bulk_exit_status(&[result(false), result(false)]).is_err());
-    }
-
-    #[test]
-    fn wrap_resolve_error_preserves_rate_limited_kind() {
-        let original = CliError::rate_limited("429").with_retry_after(Some(7));
-        let wrapped = wrap_resolve_error("label", "Bug", original.into());
-        let cli = wrapped.downcast_ref::<CliError>().expect("CliError");
-        assert_eq!(cli.code(), 4);
-        assert_eq!(cli.retry_after, Some(7));
-    }
-
-    #[test]
-    fn wrap_resolve_error_keeps_message_for_plain_error() {
-        let wrapped = wrap_resolve_error("user", "nobody", anyhow::anyhow!("not found"));
-        assert!(wrapped.to_string().contains("nobody"));
-        assert!(wrapped.to_string().contains("not found"));
     }
 }

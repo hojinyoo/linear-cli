@@ -110,6 +110,30 @@ impl fmt::Display for CliError {
 
 impl Error for CliError {}
 
+/// Re-wrap `source` with a new human-readable `message`, preserving the original
+/// [`CliError`]'s `kind` / `details` / `retry_after` when `source` is (or wraps,
+/// via `anyhow` context) a `CliError`.
+///
+/// This is the canonical place commands re-message an error without losing its
+/// exit-code semantics: a wrapped rate-limited error stays [`ErrorKind::RateLimited`]
+/// (exit 4) with its `retry_after`, instead of being flattened to a generic
+/// error. When `source` is not a `CliError`, a generic error carrying `message`
+/// is returned — callers should embed the original cause in `message` so the
+/// string-based exit-code heuristics still apply.
+pub fn rewrap_with_message(source: &anyhow::Error, message: impl Into<String>) -> anyhow::Error {
+    let message = message.into();
+    match source.downcast_ref::<CliError>() {
+        Some(cli) => {
+            let mut wrapped = CliError::new(cli.kind, message).with_retry_after(cli.retry_after);
+            if let Some(details) = &cli.details {
+                wrapped = wrapped.with_details(details.clone());
+            }
+            wrapped.into()
+        }
+        None => anyhow::anyhow!("{message}"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -198,5 +222,58 @@ mod tests {
         let err = CliError::not_found("Issue not found");
         assert_eq!(err.code(), 2);
         assert_eq!(err.kind, ErrorKind::NotFound);
+    }
+
+    #[test]
+    fn rewrap_preserves_kind_and_retry_after() {
+        let source: anyhow::Error = CliError::rate_limited("429")
+            .with_retry_after(Some(9))
+            .into();
+        let wrapped = rewrap_with_message(&source, "while fetching LIN-1");
+        let cli = wrapped
+            .downcast_ref::<CliError>()
+            .expect("CliError preserved");
+        assert_eq!(cli.kind, ErrorKind::RateLimited);
+        assert_eq!(cli.code(), 4);
+        assert_eq!(cli.retry_after, Some(9));
+        assert_eq!(cli.message, "while fetching LIN-1");
+    }
+
+    #[test]
+    fn rewrap_preserves_details() {
+        let source: anyhow::Error = CliError::general("boom")
+            .with_details(json!({ "field": "value" }))
+            .into();
+        let wrapped = rewrap_with_message(&source, "new message");
+        let cli = wrapped
+            .downcast_ref::<CliError>()
+            .expect("CliError preserved");
+        assert_eq!(cli.details, Some(json!({ "field": "value" })));
+    }
+
+    #[test]
+    fn rewrap_plain_error_keeps_message() {
+        let source = anyhow::anyhow!("not found");
+        let wrapped = rewrap_with_message(&source, "Failed to resolve 'x': not found");
+        assert!(wrapped.downcast_ref::<CliError>().is_none());
+        assert_eq!(wrapped.to_string(), "Failed to resolve 'x': not found");
+    }
+
+    #[test]
+    fn rewrap_finds_cli_error_behind_anyhow_context() {
+        use anyhow::Context;
+        // A CliError wrapped in an anyhow context layer must still be found,
+        // so re-messaging across command boundaries preserves the exit code.
+        let source = Err::<(), _>(CliError::auth("401"))
+            .context("resolving user")
+            .unwrap_err();
+        let wrapped = rewrap_with_message(&source, "Failed to resolve user 'me'");
+        assert_eq!(
+            wrapped
+                .downcast_ref::<CliError>()
+                .expect("CliError preserved")
+                .code(),
+            3
+        );
     }
 }

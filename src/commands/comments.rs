@@ -110,7 +110,10 @@ async fn list_comments(issue_ids: &[String], output: &OutputOptions) -> Result<(
                             Err(e) => Err((id, e)),
                         }
                     }
-                    Ok(_) => Err((id.clone(), CliError::not_found(format!("Issue not found: {id}")).into())),
+                    Ok(_) => Err((
+                        id.clone(),
+                        CliError::not_found(format!("Issue not found: {id}")).into(),
+                    )),
                     Err(e) => Err((id, e)),
                 }
             }
@@ -121,8 +124,7 @@ async fn list_comments(issue_ids: &[String], output: &OutputOptions) -> Result<(
 
     let mut issues = Vec::new();
     let mut missing: Vec<String> = Vec::new();
-    // A real fetch error (network/auth/rate-limit) takes priority for the exit
-    // code and keeps its original kind; genuinely-missing issues map to NotFound.
+    // Real fetch errors keep their kind; missing issues map to NotFound.
     let mut first_error: Option<anyhow::Error> = None;
     for result in fetched {
         match result {
@@ -223,11 +225,8 @@ async fn list_comments(issue_ids: &[String], output: &OutputOptions) -> Result<(
     comments_status(first_error, &missing)
 }
 
-/// Aggregate exit status for a multi-issue comment listing.
-///
-/// A real fetch error (passed through unchanged) takes priority so its exit
-/// code/kind survives; otherwise any genuinely-missing issues map to NotFound,
-/// and an all-found request returns Ok.
+/// Aggregate exit status: a real fetch error (passed through unchanged) wins so
+/// its kind survives; otherwise missing issues map to NotFound.
 fn comments_status(first_error: Option<anyhow::Error>, missing: &[String]) -> Result<()> {
     if let Some(e) = first_error {
         return Err(e);
@@ -385,7 +384,11 @@ mod tests {
     fn comments_status_preserves_real_error_over_missing() {
         // A real fetch error keeps its kind (rate-limited => 4), not NotFound(2).
         let err = comments_status(
-            Some(CliError::rate_limited("429").with_retry_after(Some(5)).into()),
+            Some(
+                CliError::rate_limited("429")
+                    .with_retry_after(Some(5))
+                    .into(),
+            ),
             &["LIN-9".to_string()],
         )
         .unwrap_err();

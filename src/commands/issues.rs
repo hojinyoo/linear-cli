@@ -11,7 +11,7 @@ use crate::api::{
 };
 use crate::cache::CacheOptions;
 use crate::display_options;
-use crate::error::CliError;
+use crate::error::{self, CliError};
 use crate::input::read_ids_from_stdin;
 use crate::output::{
     ensure_non_empty, filter_values, print_json, print_json_owned, sort_values, OutputOptions,
@@ -805,10 +805,8 @@ async fn get_issues(
         .collect()
         .await;
 
-    // Exit status: any missing or errored issue makes the command exit
-    // non-zero, while the issues that WERE found are still printed. Computed
-    // before printing so `results` can be consumed by the table path; the
-    // returned error owns its message so it does not borrow `results`.
+    // Any missing/errored issue exits non-zero; the issues found are still
+    // printed. Computed before printing so `results` can be consumed below.
     let status = multi_get_status(&results);
 
     // JSON output: array of issues
@@ -855,19 +853,18 @@ async fn get_issues(
     status
 }
 
-/// Aggregate exit status for a multi-issue fetch.
-///
-/// A real fetch error (network, auth, rate-limit) takes priority and keeps its
-/// original error kind, so the exit code stays accurate (e.g. 4/RateLimited
-/// remains retryable for an orchestrator). Only a genuinely missing issue — a
-/// `null` issue node in an otherwise-successful response — maps to NotFound.
+/// Aggregate exit status for a multi-issue fetch. A real fetch error takes
+/// priority and keeps its kind (e.g. RateLimited stays retryable); only a `null`
+/// issue node maps to NotFound.
 fn multi_get_status(results: &[(String, Result<serde_json::Value>)]) -> Result<()> {
-    // Real errors win over plain not-found, and preserve their kind/retry hint.
     if let Some((id, e)) = results.iter().find_map(|(id, r)| match r {
         Err(e) => Some((id, e)),
         Ok(_) => None,
     }) {
-        return Err(wrap_fetch_error(id, e));
+        return Err(error::rewrap_with_message(
+            e,
+            format!("Error fetching {id}: {e}"),
+        ));
     }
 
     let missing: Vec<&str> = results
@@ -880,21 +877,6 @@ fn multi_get_status(results: &[(String, Result<serde_json::Value>)]) -> Result<(
         Ok(())
     } else {
         Err(CliError::not_found(format!("Issue(s) not found: {}", missing.join(", "))).into())
-    }
-}
-
-/// Wrap a per-item fetch error for the aggregate exit, preserving the original
-/// `CliError` kind/retry hint where present so the exit code is accurate.
-fn wrap_fetch_error(id: &str, e: &anyhow::Error) -> anyhow::Error {
-    if let Some(cli) = e.downcast_ref::<CliError>() {
-        let mut wrapped =
-            CliError::new(cli.kind, format!("Error fetching {}: {}", id, e)).with_retry_after(cli.retry_after);
-        if let Some(details) = &cli.details {
-            wrapped = wrapped.with_details(details.clone());
-        }
-        wrapped.into()
-    } else {
-        anyhow::anyhow!("Error fetching {}: {}", id, e)
     }
 }
 
@@ -2328,20 +2310,27 @@ mod tests {
 
     #[test]
     fn multi_get_status_notfound_when_issue_null() {
-        let results = vec![("LIN-9".to_string(), Ok(json!({ "data": { "issue": null } })))];
+        let results = vec![(
+            "LIN-9".to_string(),
+            Ok(json!({ "data": { "issue": null } })),
+        )];
         let err = multi_get_status(&results).unwrap_err();
         assert_eq!(err.downcast_ref::<CliError>().expect("CliError").code(), 2);
     }
 
     #[test]
     fn multi_get_status_preserves_rate_limited_kind_over_notfound() {
-        // A real fetch error must NOT be collapsed to NotFound(2): a 429 stays
-        // RateLimited(4) so an orchestrator keeps retrying.
+        // A 429 must stay RateLimited(4), not collapse to NotFound(2).
         let results: Vec<(String, Result<Value>)> = vec![
-            ("LIN-1".to_string(), Ok(json!({ "data": { "issue": null } }))),
+            (
+                "LIN-1".to_string(),
+                Ok(json!({ "data": { "issue": null } })),
+            ),
             (
                 "LIN-2".to_string(),
-                Err(CliError::rate_limited("429").with_retry_after(Some(3)).into()),
+                Err(CliError::rate_limited("429")
+                    .with_retry_after(Some(3))
+                    .into()),
             ),
         ];
         let err = multi_get_status(&results).unwrap_err();
