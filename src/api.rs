@@ -695,9 +695,7 @@ impl LinearClient {
         let result: Value = response.json().await?;
 
         if let Some(errors) = result.get("errors") {
-            return Err(CliError::general("GraphQL error")
-                .with_details(errors.clone())
-                .into());
+            return Err(CliError::from_graphql_errors(errors).into());
         }
 
         Ok(result)
