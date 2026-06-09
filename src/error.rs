@@ -72,6 +72,71 @@ impl CliError {
         self.retry_after = retry_after;
         self
     }
+
+    /// Classify a GraphQL `errors` array into a `CliError` with a precise exit code.
+    ///
+    /// Linear reports application-level failures as HTTP 200 with an `errors`
+    /// array, so the real signal lives in the first error's `extensions`
+    /// (`statusCode` / `code`) or its message text rather than the transport
+    /// status. The message stays "GraphQL error" so `Display` still appends the
+    /// underlying error messages.
+    pub fn from_graphql_errors(errors: &Value) -> Self {
+        let first = errors.as_array().and_then(|arr| arr.first());
+        let kind = first.map_or(ErrorKind::General, Self::classify_graphql_error);
+        let mut err = Self::new(kind, "GraphQL error").with_details(errors.clone());
+        if kind == ErrorKind::RateLimited {
+            let retry_after = first
+                .and_then(|e| e.get("extensions"))
+                .and_then(|ext| ext.get("retryAfter"))
+                .and_then(Value::as_u64);
+            err = err.with_retry_after(retry_after);
+        }
+        err
+    }
+
+    fn classify_graphql_error(error: &Value) -> ErrorKind {
+        let ext = error.get("extensions");
+
+        // 1. Numeric status code carried in extensions, when present.
+        if let Some(status) = ext.and_then(|e| e.get("statusCode")).and_then(Value::as_u64) {
+            match status {
+                401 | 403 => return ErrorKind::Auth,
+                404 => return ErrorKind::NotFound,
+                429 => return ErrorKind::RateLimited,
+                _ => {}
+            }
+        }
+
+        // 2. Symbolic code string (e.g. AUTHENTICATION_ERROR, RATELIMITED).
+        if let Some(code) = ext.and_then(|e| e.get("code")).and_then(Value::as_str) {
+            let code = code.to_ascii_uppercase();
+            if code.contains("AUTH") {
+                return ErrorKind::Auth;
+            }
+            if code.contains("RATELIM") {
+                return ErrorKind::RateLimited;
+            }
+            if code.contains("NOT_FOUND") {
+                return ErrorKind::NotFound;
+            }
+        }
+
+        // 3. Message text — Linear reports "Entity not found" with statusCode 400.
+        let msg = error
+            .get("message")
+            .and_then(Value::as_str)
+            .or_else(|| {
+                ext.and_then(|e| e.get("userPresentableMessage"))
+                    .and_then(Value::as_str)
+            })
+            .unwrap_or("");
+        let lower = msg.to_ascii_lowercase();
+        if lower.contains("not found") || lower.contains("could not find") {
+            return ErrorKind::NotFound;
+        }
+
+        ErrorKind::General
+    }
 }
 
 impl fmt::Display for CliError {
@@ -275,5 +340,73 @@ mod tests {
                 .code(),
             3
         );
+    }
+
+    #[test]
+    fn graphql_entity_not_found_maps_to_not_found() {
+        // Linear returns "Entity not found" as HTTP 200 + errors array with
+        // statusCode 400 (NOT 404), so classification must fall through to the
+        // message-text check. This is the common `i get <bad-id>` path.
+        let errors = json!([{
+            "message": "Entity not found: Issue",
+            "extensions": {
+                "code": "INPUT_ERROR",
+                "statusCode": 400,
+                "type": "invalid input",
+                "userError": true,
+                "userPresentableMessage": "Could not find referenced Issue."
+            }
+        }]);
+        let err = CliError::from_graphql_errors(&errors);
+        assert_eq!(err.kind, ErrorKind::NotFound);
+        assert_eq!(err.code(), 2);
+        assert_eq!(err.to_string(), "GraphQL error: Entity not found: Issue");
+    }
+
+    #[test]
+    fn graphql_auth_error_maps_to_auth() {
+        let errors = json!([{
+            "message": "Authentication required",
+            "extensions": { "code": "AUTHENTICATION_ERROR" }
+        }]);
+        let err = CliError::from_graphql_errors(&errors);
+        assert_eq!(err.kind, ErrorKind::Auth);
+        assert_eq!(err.code(), 3);
+    }
+
+    #[test]
+    fn graphql_rate_limit_maps_to_rate_limited_with_retry_after() {
+        let errors = json!([{
+            "message": "Too many requests",
+            "extensions": { "code": "RATELIMITED", "retryAfter": 30 }
+        }]);
+        let err = CliError::from_graphql_errors(&errors);
+        assert_eq!(err.kind, ErrorKind::RateLimited);
+        assert_eq!(err.code(), 4);
+        assert_eq!(err.retry_after, Some(30));
+    }
+
+    #[test]
+    fn graphql_status_code_takes_precedence() {
+        // A 403 in extensions classifies as Auth even without a code string.
+        let errors = json!([{
+            "message": "denied",
+            "extensions": { "statusCode": 403 }
+        }]);
+        assert_eq!(CliError::from_graphql_errors(&errors).code(), 3);
+    }
+
+    #[test]
+    fn graphql_generic_error_stays_general() {
+        let errors = json!([{ "message": "Field 'foo' is invalid" }]);
+        let err = CliError::from_graphql_errors(&errors);
+        assert_eq!(err.kind, ErrorKind::General);
+        assert_eq!(err.code(), 1);
+    }
+
+    #[test]
+    fn graphql_empty_errors_stays_general() {
+        let errors = json!([]);
+        assert_eq!(CliError::from_graphql_errors(&errors).kind, ErrorKind::General);
     }
 }
