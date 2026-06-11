@@ -98,7 +98,10 @@ impl CliError {
         let ext = error.get("extensions");
 
         // 1. Numeric status code carried in extensions, when present.
-        if let Some(status) = ext.and_then(|e| e.get("statusCode")).and_then(Value::as_u64) {
+        if let Some(status) = ext
+            .and_then(|e| e.get("statusCode"))
+            .and_then(Value::as_u64)
+        {
             match status {
                 401 | 403 => return ErrorKind::Auth,
                 404 => return ErrorKind::NotFound,
@@ -407,6 +410,9 @@ mod tests {
     #[test]
     fn graphql_empty_errors_stays_general() {
         let errors = json!([]);
-        assert_eq!(CliError::from_graphql_errors(&errors).kind, ErrorKind::General);
+        assert_eq!(
+            CliError::from_graphql_errors(&errors).kind,
+            ErrorKind::General
+        );
     }
 }
